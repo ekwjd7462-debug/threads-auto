@@ -11,6 +11,7 @@ import json
 import os
 import sys
 import time
+import re
 import urllib.request
 import urllib.parse
 
@@ -87,11 +88,28 @@ JSON 배열만 출력. 각 원소는 파트 1개의 본문 문자열. 각 파트
                 raise ValueError(f"part count {len(parts)} != {topic['num_parts']}")
             if any(len(p) > MAX_PART_LEN for p in parts):
                 raise ValueError("part too long")
+            parts = [ensure_linebreaks(p) for p in parts]
             return title, parts
         except Exception as e:
             print(f"[gemini] attempt {attempt+1} failed: {e}", flush=True)
             time.sleep(5)
     raise RuntimeError("gemini generation failed after 3 attempts")
+
+
+def ensure_linebreaks(part):
+    """줄바꿈이 부족한 파트에 문장 단위 줄바꿈을 자동 삽입."""
+    if len(part) < 160 or part.count("\n") >= 2:
+        return part
+    lines = part.split("\n")
+    out_lines = []
+    for line in lines:
+        sents = re.split(r"(?<=[.!?])\s+", line.strip())
+        sents = [s for s in sents if s]
+        # 문장 2개씩 묶어 한 덩어리로, 덩어리 사이는 빈 줄
+        groups = ["\n".join(sents[i:i+2]) for i in range(0, len(sents), 2)]
+        out_lines.append("\n\n".join(groups))
+    fixed = "\n".join(out_lines)
+    return fixed if len(fixed) <= MAX_PART_LEN else part
 
 
 def threads_post(token, text, reply_to=None):
