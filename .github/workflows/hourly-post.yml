@@ -1,0 +1,34 @@
+name: hourly-threads-post
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # 매시간 정각 (UTC)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: threads-post
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Post next thread
+        env:
+          THREADS_TOKEN: ${{ secrets.THREADS_TOKEN }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python3 post_bot.py
+
+      - name: Commit state
+        run: |
+          git config user.name "threads-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add state.json
+          git diff --cached --quiet || git commit -m "state: post $(date -u +'%Y-%m-%dT%H:%M')"
+          git push
