@@ -47,12 +47,18 @@ JSON 객체만 출력: {{"title": "새 주제 제목", "parts": ["파트1 본문
         spec = f"""## 이번 글 스펙
 - 제목/주제: {topic['title']}
 - 구조 유형: {topic['structure']}
-- 카테고리: {topic['category']}
 - 파트 수: {topic['num_parts']}개 (반드시 정확히 이 개수)
-- 논지/훅 힌트: {topic['angle']}
+
+## 완성 초안 (이 글의 품질 기준임)
+{json.dumps(topic['reference_draft'], ensure_ascii=False, indent=1)}
+
+## 작업 지시
+위 초안의 훅, 구성, 리스트 항목, 참여 유도 문장, 줄바꿈 위치를 그대로 유지하면서
+문장 표현만 20~30% 수준으로 자연스럽게 바꿔 재작성하세요. 재배열·요약·추상화 금지.
+초안보다 밋밋해지면 실패작입니다.
 
 ## 출력 형식
-JSON 배열만 출력. 각 원소는 파트 1개의 본문 문자열. 각 파트는 공백 포함 480자 이하.
+JSON 배열만 출력. 각 원소는 파트 1개의 본문 문자열(개행문자 포함). 각 파트는 공백 포함 490자 이하.
 예: ["파트1 본문", "파트2 본문"]"""
 
     prompt = f"""당신은 사주 명리 콘텐츠 전문 작가입니다. 아래 문체 가이드를 완벽히 체화한 뒤,
@@ -68,7 +74,7 @@ JSON 배열만 출력. 각 원소는 파트 1개의 본문 문자열. 각 파트
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "responseMimeType": "application/json",
-            "temperature": 0.9,
+            "temperature": 0.85,
         },
     }
     for attempt in range(3):
