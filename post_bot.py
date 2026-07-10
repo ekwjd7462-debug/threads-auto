@@ -16,7 +16,7 @@ import urllib.request
 import urllib.parse
 
 THREADS_API = "https://graph.threads.net/v1.0"
-GEMINI_MODELS = ["gemini-2.5-flash", "gemini-2.0-flash"]  # 503 시 예비 모델
+GEMINI_MODELS = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-flash-lite-latest"]  # 503 시 순차 폴백
 MAX_PART_LEN = 500
 
 
@@ -75,8 +75,8 @@ JSON 배열만 출력. 각 원소는 파트 1개의 본문 문자열(개행문�
             "temperature": 0.85,
         },
     }
-    backoffs = [5, 15, 30, 60, 90]
-    for attempt in range(5):
+    backoffs = [5, 15, 30, 45, 60, 90]
+    for attempt in range(6):
         model = GEMINI_MODELS[min(attempt // 2, len(GEMINI_MODELS) - 1)]
         url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
                f"{model}:generateContent?key={api_key}")
@@ -101,7 +101,7 @@ JSON 배열만 출력. 각 원소는 파트 1개의 본문 문자열(개행문�
         except Exception as e:
             print(f"[gemini] attempt {attempt+1} ({model}) failed: {e}", flush=True)
             time.sleep(backoffs[attempt])
-    raise RuntimeError("gemini generation failed after 5 attempts")
+    raise RuntimeError("gemini generation failed after 6 attempts")
 
 
 def ensure_linebreaks(part):
