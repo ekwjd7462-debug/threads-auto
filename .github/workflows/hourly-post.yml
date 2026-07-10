@@ -2,7 +2,7 @@ name: hourly-threads-post
 
 on:
   schedule:
-    - cron: '0 * * * *'   # 매시간 정각 (UTC)
+    - cron: '7 * * * *'   # 매시 7분 (UTC) — 정각은 GitHub 혼잡으로 누락 잦음
   workflow_dispatch: {}
 
 permissions:
