@@ -29,23 +29,37 @@ def http_json(url, method="GET", body=None, timeout=60):
         return json.loads(r.read().decode("utf-8"))
 
 
-def gemini_generate(api_key, topic, style_guide):
-    prompt = f"""당신은 사주 명리 콘텐츠 전문 작가입니다. 아래 문체 가이드를 완벽히 체화한 뒤,
-주어진 주제와 구조로 Threads(스레드) 게시물을 작성하세요.
+def gemini_generate(api_key, topic, style_guide, avoid_titles=None):
+    if avoid_titles:
+        spec = f"""## 이번 글 스펙 (새 주제 창작 모드)
+- 구조 유형: {topic['structure']}
+- 카테고리: {topic['category']}
+- 파트 수: {topic['num_parts']}개 (반드시 정확히 이 개수)
+- 이 구조와 카테고리에 맞는 **새로운 주제**를 직접 만들어서 쓰세요.
+- 아래 최근 게시글 제목들과 주제가 겹치면 절대 안 됩니다:
+{chr(10).join('  - ' + t for t in avoid_titles)}
 
-{style_guide}
-
-## 이번 글 스펙
+## 출력 형식
+JSON 객체만 출력: {{"title": "새 주제 제목", "parts": ["파트1 본문", "파트2 본문"]}}
+각 파트는 공백 포함 480자 이하."""
+    else:
+        spec = f"""## 이번 글 스펙
 - 제목/주제: {topic['title']}
 - 구조 유형: {topic['structure']}
 - 카테고리: {topic['category']}
 - 파트 수: {topic['num_parts']}개 (반드시 정확히 이 개수)
-
 - 논지/훅 힌트: {topic['angle']}
 
 ## 출력 형식
 JSON 배열만 출력. 각 원소는 파트 1개의 본문 문자열. 각 파트는 공백 포함 480자 이하.
 예: ["파트1 본문", "파트2 본문"]"""
+
+    prompt = f"""당신은 사주 명리 콘텐츠 전문 작가입니다. 아래 문체 가이드를 완벽히 체화한 뒤,
+주어진 스펙과 구조로 Threads(스레드) 게시물을 작성하세요.
+
+{style_guide}
+
+{spec}"""
 
     url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
            f"{GEMINI_MODEL}:generateContent?key={api_key}")
@@ -60,14 +74,20 @@ JSON 배열만 출력. 각 원소는 파트 1개의 본문 문자열. 각 파트
         try:
             resp = http_json(url, "POST", body, timeout=120)
             text = resp["candidates"][0]["content"]["parts"][0]["text"]
-            parts = json.loads(text)
+            data = json.loads(text)
+            title = topic["title"]
+            if isinstance(data, dict):
+                title = str(data.get("title", "")).strip() or title
+                parts = data.get("parts", [])
+            else:
+                parts = data
             assert isinstance(parts, list)
             parts = [str(p).strip() for p in parts if str(p).strip()]
             if len(parts) != topic["num_parts"]:
                 raise ValueError(f"part count {len(parts)} != {topic['num_parts']}")
             if any(len(p) > MAX_PART_LEN for p in parts):
                 raise ValueError("part too long")
-            return parts
+            return title, parts
         except Exception as e:
             print(f"[gemini] attempt {attempt+1} failed: {e}", flush=True)
             time.sleep(5)
@@ -99,15 +119,18 @@ def main():
     style_guide = open("style_guide.md", encoding="utf-8").read()
 
     idx = state["next_index"]
+    template_idx = (idx - 1) % len(topics) + 1
+    topic = next(t for t in topics if t["index"] == template_idx)
+
+    avoid_titles = None
     if idx > len(topics):
-        print(f"All {len(topics)} posts done. Nothing to do.")
-        return 0
+        # 창작 모드: 같은 구조/카테고리로 새 주제 생성, 최근 40개 제목과 중복 금지
+        avoid_titles = [h["title"] for h in state.get("history", [])[-40:]]
 
-    topic = next(t for t in topics if t["index"] == idx)
     print(f"[post] #{idx}: {topic['title']} ({topic['structure']}, "
-          f"{topic['num_parts']} parts)", flush=True)
+          f"{topic['num_parts']} parts, creative={bool(avoid_titles)})", flush=True)
 
-    parts = gemini_generate(gemini_key, topic, style_guide)
+    title, parts = gemini_generate(gemini_key, topic, style_guide, avoid_titles)
 
     prev = None
     ids = []
@@ -120,7 +143,7 @@ def main():
 
     state["next_index"] = idx + 1
     state.setdefault("history", []).append(
-        {"index": idx, "title": topic["title"], "root_id": ids[0],
+        {"index": idx, "title": title, "root_id": ids[0],
          "posted_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
     json.dump(state, open("state.json", "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
