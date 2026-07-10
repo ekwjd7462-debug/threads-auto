@@ -144,6 +144,14 @@ def main():
     topics = json.load(open("topics.json", encoding="utf-8"))
     style_guide = open("style_guide.md", encoding="utf-8").read()
 
+    # 중복 방지: 마지막 게시 후 45분 이내면 건너뜀 (GitHub cron + 외부 트리거 이중화 대비)
+    hist = state.get("history", [])
+    if hist:
+        last_ts = time.mktime(time.strptime(hist[-1]["posted_at_utc"], "%Y-%m-%dT%H:%M:%SZ"))
+        if time.time() - last_ts < 45 * 60:
+            print(f"skip: last post {int((time.time()-last_ts)//60)} min ago (<45)")
+            return 0
+
     idx = state["next_index"]
     template_idx = (idx - 1) % len(topics) + 1
     topic = next(t for t in topics if t["index"] == template_idx)
