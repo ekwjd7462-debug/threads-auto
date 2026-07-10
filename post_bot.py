@@ -41,8 +41,7 @@ def gemini_generate(api_key, topic, style_guide):
 - 카테고리: {topic['category']}
 - 파트 수: {topic['num_parts']}개 (반드시 정확히 이 개수)
 
-## 참고 초안 (구조와 논지 참고용 — 문장을 그대로 베끼지 말고 새로 쓸 것)
-{json.dumps(topic['reference_draft'], ensure_ascii=False, indent=1)}
+- 논지/훅 힌트: {topic['angle']}
 
 ## 출력 형식
 JSON 배열만 출력. 각 원소는 파트 1개의 본문 문자열. 각 파트는 공백 포함 480자 이하.
@@ -72,9 +71,7 @@ JSON 배열만 출력. 각 원소는 파트 1개의 본문 문자열. 각 파트
         except Exception as e:
             print(f"[gemini] attempt {attempt+1} failed: {e}", flush=True)
             time.sleep(5)
-    # 최종 폴백: 참고 초안 그대로 사용 (파트 수/길이 검증된 원본)
-    print("[gemini] falling back to reference draft", flush=True)
-    return topic["reference_draft"]
+    raise RuntimeError("gemini generation failed after 3 attempts")
 
 
 def threads_post(token, text, reply_to=None):
