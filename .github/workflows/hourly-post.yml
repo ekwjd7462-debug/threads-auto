@@ -19,6 +19,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Refresh Threads token if near expiry
+        env:
+          THREADS_TOKEN: ${{ secrets.THREADS_TOKEN }}
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          if [ -z "$GH_PAT" ]; then echo "GH_PAT not set; skipping auto-refresh"; exit 0; fi
+          python3 - <<'PY'
+          import json, os, time, urllib.request, urllib.parse, subprocess
+          meta = json.load(open('refresh_meta.json'))
+          now = time.time()
+          if now > meta['expires_at'] - 14*86400 and now > meta.get('refreshed_at', 0) + 86400:
+              url = ('https://graph.threads.net/refresh_access_token?'
+                     + urllib.parse.urlencode({'grant_type': 'th_refresh_token',
+                                               'access_token': os.environ['THREADS_TOKEN']}))
+              r = json.loads(urllib.request.urlopen(url, timeout=60).read())
+              env = dict(os.environ, GH_TOKEN=os.environ['GH_PAT'])
+              subprocess.run(['gh', 'secret', 'set', 'THREADS_TOKEN',
+                              '--repo', os.environ['GITHUB_REPOSITORY'],
+                              '--body', r['access_token']], check=True, env=env)
+              json.dump({'expires_at': now + r.get('expires_in', 5184000),
+                         'refreshed_at': now}, open('refresh_meta.json', 'w'), indent=1)
+              print('token refreshed; new expiry in', r.get('expires_in', 0)//86400, 'days')
+          else:
+              print('token still fresh; no refresh needed')
+          PY
+
       - name: Post next thread
         env:
           THREADS_TOKEN: ${{ secrets.THREADS_TOKEN }}
@@ -29,6 +55,6 @@ jobs:
         run: |
           git config user.name "threads-bot"
           git config user.email "bot@users.noreply.github.com"
-          git add state.json
+          git add state.json refresh_meta.json
           git diff --cached --quiet || git commit -m "state: post $(date -u +'%Y-%m-%dT%H:%M')"
           git push
