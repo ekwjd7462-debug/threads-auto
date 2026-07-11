@@ -19,6 +19,45 @@ THREADS_API = "https://graph.threads.net/v1.0"
 GEMINI_MODELS = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-flash-lite-latest"]  # 503 시 순차 폴백
 MAX_PART_LEN = 500
 
+# KST 01~07시(UTC 16~22시)는 조회수가 거의 안 나오는 죽은 시간대 → 게시 안 함
+DEAD_UTC_HOURS = set(range(16, 23))
+
+# 창작 모드(31번째 글부터) 구조 로테이션 — 실측 조회수 기반 가중치.
+# 비교형(평균 1,300+)·질문떡밥형(타 계정 벤치마킹 최상위)·텐션불릿형·TOP리스트형 위주.
+# 단문완결형(평균 ~150)·상담인용형(평균 ~200)은 제외.
+CREATIVE_SLOTS = [
+    {"structure": "비교형", "category": "연애", "num_parts": 4},
+    {"structure": "질문떡밥형", "category": "운세", "num_parts": 1},
+    {"structure": "텐션불릿형", "category": "연애", "num_parts": 1},
+    {"structure": "TOP리스트형", "category": "재물", "num_parts": 3},
+    {"structure": "자리별해석형", "category": "인간관계", "num_parts": 2},
+    {"structure": "질문떡밥형", "category": "재물", "num_parts": 1},
+    {"structure": "비교형", "category": "직업", "num_parts": 4},
+    {"structure": "일상디테일리스트형", "category": "연애", "num_parts": 1},
+    {"structure": "TOP리스트형", "category": "연애", "num_parts": 3},
+    {"structure": "질문떡밥형", "category": "인간관계", "num_parts": 1},
+    {"structure": "비교형", "category": "재물", "num_parts": 4},
+    {"structure": "자리별해석형", "category": "연애", "num_parts": 2},
+    {"structure": "텐션불릿형", "category": "직업", "num_parts": 1},
+    {"structure": "일상디테일리스트형", "category": "인간관계", "num_parts": 1},
+    {"structure": "절기·띠저격형", "category": "운세", "num_parts": 2},
+    {"structure": "일간지목형", "category": "연애", "num_parts": 3},
+]
+
+STRUCTURE_HINTS = {
+    "질문떡밥형": (
+        "전체 250자 미만의 아주 짧은 글. 통념 한 줄 던지고 → 상담 현장에서 본 반례/이상한 패턴 관찰 → "
+        "'왜지', '이거 뭘까', '나만 그런가' 같은 미완결 질문으로 뚝 끊고 끝냄. "
+        "결론·해설·처방 절대 금지. 독자가 댓글로 자기 얘기와 답을 쏟아내게 만드는 떡밥 글임. "
+        "리스트 금지, 권위 문구 금지, 강의 금지."
+    ),
+    "일상디테일리스트형": (
+        "사주 개념을 일상 장면 체크리스트로 번역한 글. 항목 5~6개, 각 항목은 반드시 구체적 생활 장면 "
+        "(카톡 답장 속도, 밥 먹는 취향, 월급날 통장, 데이트 통장 눈치게임 같은 것). "
+        "추상 개념어 항목은 실패작. 마지막에 '몇 개 해당됨?' 같은 참여 유도."
+    ),
+}
+
 
 def http_json(url, method="GET", body=None, timeout=60):
     req = urllib.request.Request(url, method=method)
@@ -31,11 +70,13 @@ def http_json(url, method="GET", body=None, timeout=60):
 
 
 def gemini_generate(api_key, topic, style_guide, avoid_titles=None):
+    hint = STRUCTURE_HINTS.get(topic["structure"], "")
+    hint_block = f"\n- 구조 추가 지시: {hint}" if hint else ""
     if avoid_titles:
         spec = f"""## 이번 글 스펙 (새 주제 창작 모드)
 - 구조 유형: {topic['structure']}
 - 카테고리: {topic['category']}
-- 파트 수: {topic['num_parts']}개 (반드시 정확히 이 개수)
+- 파트 수: {topic['num_parts']}개 (반드시 정확히 이 개수){hint_block}
 - 이 구조와 카테고리에 맞는 **새로운 주제**를 직접 만들어서 쓰세요.
 - 아래 최근 게시글 제목들과 주제가 겹치면 절대 안 됩니다:
 {chr(10).join('  - ' + t for t in avoid_titles)}
@@ -96,7 +137,8 @@ JSON 배열만 출력. 각 원소는 파트 1개의 본문 문자열(개행문�
                 raise ValueError(f"part count {len(parts)} != {topic['num_parts']}")
             if any(len(p) > MAX_PART_LEN for p in parts):
                 raise ValueError("part too long")
-            parts = [ensure_linebreaks(p) for p in parts]
+            if topic["structure"] != "질문떡밥형":
+                parts = [ensure_linebreaks(p) for p in parts]
             return title, parts
         except Exception as e:
             print(f"[gemini] attempt {attempt+1} ({model}) failed: {e}", flush=True)
@@ -140,6 +182,11 @@ def main():
     token = os.environ["THREADS_TOKEN"]
     gemini_key = os.environ["GEMINI_API_KEY"]
 
+    # 죽은 시간대(KST 새벽 01~07시) 게시 금지 — 도달이 낮아 계정 평균 조회수만 깎아먹음
+    if time.gmtime().tm_hour in DEAD_UTC_HOURS:
+        print(f"skip: dead hour (UTC {time.gmtime().tm_hour} = KST 새벽)")
+        return 0
+
     state = json.load(open("state.json", encoding="utf-8"))
     topics = json.load(open("topics.json", encoding="utf-8"))
     style_guide = open("style_guide.md", encoding="utf-8").read()
@@ -153,13 +200,15 @@ def main():
             return 0
 
     idx = state["next_index"]
-    template_idx = (idx - 1) % len(topics) + 1
-    topic = next(t for t in topics if t["index"] == template_idx)
 
     avoid_titles = None
     if idx > len(topics):
-        # 창작 모드: 같은 구조/카테고리로 새 주제 생성, 최근 40개 제목과 중복 금지
+        # 창작 모드: 실측 조회수 기반 가중 로테이션으로 구조 선택, 최근 40개 제목과 중복 금지
+        slot = CREATIVE_SLOTS[(idx - len(topics) - 1) % len(CREATIVE_SLOTS)]
+        topic = dict(slot, index=idx, title=f"{slot['category']} 신규 주제")
         avoid_titles = [h["title"] for h in state.get("history", [])[-40:]]
+    else:
+        topic = next(t for t in topics if t["index"] == idx)
 
     print(f"[post] #{idx}: {topic['title']} ({topic['structure']}, "
           f"{topic['num_parts']} parts, creative={bool(avoid_titles)})", flush=True)
