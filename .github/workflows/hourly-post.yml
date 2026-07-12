@@ -2,7 +2,7 @@ name: hourly-threads-post
 
 on:
   schedule:
-    - cron: '7 * * * *'   # 매시 7분 (UTC) — 정각은 GitHub 혼잡으로 누락 잦음
+    - cron: '7 0-15,23 * * *'   # KST 08~24시만 게시 (KST 새벽 01~07시는 조회수 죽는 시간대)
   workflow_dispatch: {}
 
 permissions:
