@@ -9,6 +9,7 @@
 """
 import json
 import os
+import re
 import sys
 import time
 import urllib.request
@@ -110,6 +111,17 @@ def gemini_call(api_key, prompt, temperature):
     raise RuntimeError(f"gemini failed after 6 attempts: {last}")
 
 
+# 프로그램 차원 금지 패턴 — 걸리면 해당 생성 시도 자체를 실패 처리하고 재생성
+FORBIDDEN = [
+    (re.compile(r"당신"), "호칭 위반(당신)"),
+    (re.compile(r"너네|너희|네 사주|(^|\s)네가\s"), "호칭 위반(너)"),
+    (re.compile(r"\d+\s*%"), "퍼센트 통계 날조"),
+    (re.compile(r"지난\s*[갑을병정무기경신임계][자축인묘진사오미신유술해]년"), "60년 전 간지 회상"),
+    (re.compile(r"[\U0001F000-\U0001FAFF☀-➿]"), "이모지"),
+    (re.compile(r"#\w"), "해시태그"),
+]
+
+
 def validate(data, lo, hi):
     title = str(data.get("title", "")).strip()
     parts = data.get("parts", [])
@@ -119,6 +131,18 @@ def validate(data, lo, hi):
         raise ValueError(f"part count {len(parts)} not in [{lo},{hi}]")
     if any(len(p) > MAX_PART_LEN for p in parts):
         raise ValueError("part too long")
+    for p in parts:
+        for pat, why in FORBIDDEN:
+            if pat.search(p):
+                raise ValueError(f"forbidden pattern: {why}")
+    # "TOP N" / "N가지" 예고 개수와 실제 번호 항목 수 일치 검사
+    body = "\n".join(parts)
+    m = re.search(r"(?:TOP|톱)\s*(\d)|(\d)\s*가지", body)
+    if m:
+        n = int(m.group(1) or m.group(2))
+        items = {int(x) for x in re.findall(r"^\s*(\d)[.)]", body, re.M)}
+        if items and (len(items) < n or max(items) != n):
+            raise ValueError(f"list count mismatch: promised {n}, numbered {sorted(items)}")
     if not title:
         title = parts[0].split("\n")[0][:60]
     return title, parts
@@ -187,7 +211,30 @@ JSON 객체만: {{"title": "관리용 짧은 제목", "parts": ["파트1", "파�
 JSON 객체만: {{"title": "...", "parts": ["..."]}}"""
 
     final = gemini_call(api_key, editor_prompt, 0.7)
-    return validate(final, lo, hi)
+    title, parts = validate(final, lo, hi)
+
+    verifier_prompt = f"""당신은 명리학 검수관입니다. 아래 스레드 게시글에서 다음 항목만 검사하고
+문제가 있으면 최소한으로 고쳐서 다시 출력합니다. 문제가 없으면 그대로 출력합니다.
+
+## 검사 항목
+1. 내부 모순: 앞 문장과 뒤 문장의 주장이 충돌하는가 (예: 앞에서 "무재가 유리" 뒤에서 "재성 있어야 부자")
+2. 명리 이론 오류: 오행 상생상극(목생화 화생토 토생금 금생수 수생목 / 목극토 토극수 수극화 화극금 금극목),
+   십신 판정(일간을 생하면 인성. 일간이 생하면 식상. 일간을 극하면 관성. 일간이 극하면 재성. 같으면 비겁),
+   도화살=자오묘유 역마살=인신사해 화개살=진술축미, 병오년=천간 불 지지 불
+3. 개수 일치: TOP N이나 N가지를 예고했으면 항목이 정확히 N개인가
+4. 시간 개연성: 18년 경력(2008년 이후)과 모순되는 과거 경험 주장이 없는가. 지난 병오년은 1966년임
+5. 독자 모욕: "멍청한 거다" 같은 독자 비하가 있으면 상식을 때리는 표현으로 교체
+6. 최근 글과의 충돌: 아래 최근 글 목록과 정면 모순되는 주장이 있으면 각도를 조정
+{avoid_block}
+
+## 검사할 글
+{json.dumps({"title": title, "parts": parts}, ensure_ascii=False, indent=1)}
+
+## 출력 형식
+JSON 객체만: {{"title": "...", "parts": ["..."]}}. 각 파트 480자 이하. 파트 수 {lo}~{hi}개 유지."""
+
+    checked = gemini_call(api_key, verifier_prompt, 0.3)
+    return validate(checked, lo, hi)
 
 
 def threads_post(token, text, reply_to=None):
