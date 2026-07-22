@@ -19,9 +19,23 @@ THREADS_API = "https://graph.threads.net/v1.0"
 GEMINI_MODELS = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-flash-lite-latest"]
 MAX_PART_LEN = 500
 
-# 하루 시간표 (KST 시각 → 트랙/엔진/소재). KST 01~07시는 슬롯 없음 = 게시 안 함.
-# 트랙 배분: 정보 9 / 모객 3 / 전환 2 / 성장 3
+# 하루 시간표 (KST 시각 → 트랙/엔진/소재). 24시간 게시.
+# 트랙 배분: 정보 13 / 모객 6 / 전환 2 / 성장 3
 DAY_PLAN = {
+    1:  {"track": "정보", "engine": "특징해부형", "category": "연애",
+         "note": "새벽 감성. 잠 못 드는 사람들 연애 사주 해부"},
+    2:  {"track": "모객", "engine": "떡밥관찰형", "category": "인생",
+         "note": "새벽에 곱씹게 되는 통념 반박 관찰"},
+    3:  {"track": "정보", "engine": "통찰에세이형", "category": "인생",
+         "note": "새벽 3시에 깨어 있는 사람에게 닿는 사유 글"},
+    4:  {"track": "정보", "engine": "조합랭킹형", "category": "재물",
+         "note": "일간×신살 조합 랭킹"},
+    5:  {"track": "정보", "engine": "일상판별리스트형", "category": "연애",
+         "note": "궁합·인연 판별 체크리스트"},
+    6:  {"track": "정보", "engine": "텐션불릿형", "category": "연애",
+         "note": "아침 첫 스크롤에 걸리는 정착 상대 불릿"},
+    7:  {"track": "모객", "engine": "생년참여형", "category": "운세",
+         "note": "출근 전 오늘 운 궁금한 사람들 생년 참여 판"},
     8:  {"track": "정보", "engine": "특징해부형", "category": "연애",
          "note": "출근길에 가볍게 읽고 공감할 오행·살 행동 패턴"},
     9:  {"track": "모객", "engine": "떡밥관찰형", "category": "직업",
