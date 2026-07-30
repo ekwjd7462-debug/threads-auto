@@ -1,5 +1,5 @@
 {
- "next_index": 389,
+ "next_index": 390,
  "history": [
   {
    "index": 1,
@@ -3310,6 +3310,15 @@
    "track": "정보",
    "root_id": "18106971287107841",
    "posted_at_utc": "2026-07-30T15:19:12Z"
+  },
+  {
+   "index": 389,
+   "title": "새벽감성 연애인연 TOP3",
+   "hook": "새벽 감성 터지는 님들? 연애 인연 TOP3.",
+   "engine": "TOP리스트형",
+   "track": "정보",
+   "root_id": "18437855317127562",
+   "posted_at_utc": "2026-07-30T16:19:07Z"
   }
  ]
 }
