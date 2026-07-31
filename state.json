@@ -1,5 +1,5 @@
 {
- "next_index": 413,
+ "next_index": 414,
  "history": [
   {
    "index": 1,
@@ -3526,6 +3526,15 @@
    "track": "정보",
    "root_id": "17864387160640900",
    "posted_at_utc": "2026-07-31T15:19:32Z"
+  },
+  {
+   "index": 413,
+   "title": "미련 못 버리는 사주 TOP3",
+   "hook": "헤어지고 전 애인 SNS 염탐하다 밤새우는 님들 필독.",
+   "engine": "TOP리스트형",
+   "track": "정보",
+   "root_id": "18120176998847638",
+   "posted_at_utc": "2026-07-31T16:18:19Z"
   }
  ]
 }
