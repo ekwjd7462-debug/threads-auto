@@ -189,6 +189,19 @@ def validate(data, lo, hi):
 
 
 def generate(api_key, slot, style_guide, avoid):
+    """금지 패턴(존댓말·팔로우 등)에 걸리면 실패 대신 최대 3회 재생성."""
+    last = None
+    for attempt in range(3):
+        try:
+            return _generate_once(api_key, slot, style_guide, avoid)
+        except (ValueError, AssertionError) as e:
+            last = e
+            print(f"[generate] attempt {attempt+1} rejected: {e} -> 재생성", flush=True)
+            time.sleep(5)
+    raise RuntimeError(f"generate failed after 3 attempts: {last}")
+
+
+def _generate_once(api_key, slot, style_guide, avoid):
     engine = slot["engine"]
     lo, hi = ENGINE_PARTS[engine]
     parts_rule = ("파트 1개로 완결하셈." if lo == hi == 1 else
