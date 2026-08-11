@@ -308,7 +308,7 @@ def main():
     hist = state.get("history", [])
     if hist:
         last_ts = time.mktime(time.strptime(hist[-1]["posted_at_utc"], "%Y-%m-%dT%H:%M:%SZ"))
-        if time.time() - last_ts < 0:
+        if time.time() - last_ts < 45 * 60:
             print(f"skip: last post {int((time.time()-last_ts)//60)} min ago (<45)")
             return 0
 
