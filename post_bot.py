@@ -19,60 +19,20 @@ THREADS_API = "https://graph.threads.net/v1.0"
 GEMINI_MODELS = ["gemini-3.5-flash", "gemini-2.5-flash", "gemini-flash-lite-latest"]
 MAX_PART_LEN = 500
 
-# 하루 시간표 (KST 시각 → 트랙/엔진/소재). 24시간 게시.
-# v11: "사주 보며 느낀 점" 사주적 통찰·명언 계정. 일반 명언 아님. 사주를 렌즈로 한 지혜.
-# 벤치마크: 사주 철학 관점전복 글이 니치 최상위 (좋아요 5천+·리포스트 500+). 저장·공유가 조회수를 만듦.
-# 단문(일침형·관점전복형)을 섞어 여백을 살림.
-# 트랙 배분: 통찰 22 / 위로 2
+# 하루 시간표 (KST 시각 → 슬롯). 하루 3회만 발행: 8시·12시·21시. 나머지 시간대는 발행 안 함.
+# v11.1: 과다발행(하루 20+)이 계정 도달을 죽였다는 진단에 따라 하루 3회로 축소.
+#        각 슬롯은 요일(tm_yday)에 따라 엔진을 로테이션해 반복을 방지.
+# 아침=느낀점 연재(플래그십), 점심=관점전복(리포스트 유도), 밤=단단한 한 줄.
 DAY_PLAN = {
-    0:  {"track": "통찰", "engine": "사주일침형", "category": "운명",
-         "note": "자정. 사주로 삶을 꿰뚫는 한 줄 일침"},
-    1:  {"track": "위로", "engine": "사주위로형", "category": "시기",
-         "note": "새벽. 안 풀리는 시기를 사주로 다독임. 끝에만 '나를 찾아와' 한 번"},
-    2:  {"track": "통찰", "engine": "관점전복형", "category": "운명",
-         "note": "새벽 2시. 운명·팔자에 대한 통념을 뒤집는 짧은 통찰"},
-    3:  {"track": "통찰", "engine": "사주느낀점형", "category": "인생",
-         "note": "새벽 3시. '사주 보며 느낀 점' 연재. 담담한 깨달음 1~2개"},
-    4:  {"track": "통찰", "engine": "공통점관찰형", "category": "관계",
-         "note": "사람 인연·관계에서 본 사주 공통점"},
-    5:  {"track": "통찰", "engine": "사주일침형", "category": "인생",
-         "note": "동트기 전. 한 줄 일침"},
-    6:  {"track": "통찰", "engine": "관점전복형", "category": "복",
-         "note": "아침. 복·운에 대한 통념 뒤집기"},
-    7:  {"track": "통찰", "engine": "공통점관찰형", "category": "돈",
-         "note": "출근길. 돈 잘 버는 사람들 사주에서 본 공통점"},
-    8:  {"track": "통찰", "engine": "사주느낀점형", "category": "인생",
-         "note": "아침. '사주 N만 명 보고 느낀 점' 연재 (플래그십)"},
-    9:  {"track": "통찰", "engine": "사주일침형", "category": "돈",
-         "note": "오전. 돈·운에 대한 한 줄 일침"},
-    10: {"track": "통찰", "engine": "공통점관찰형", "category": "관계",
-         "note": "오전. 잘 사는 부부·인연 사주 공통점"},
-    11: {"track": "통찰", "engine": "운흐름통찰형", "category": "시기",
-         "note": "때·흐름에 대한 통찰. 대운의 의미를 지혜로"},
-    12: {"track": "통찰", "engine": "사주느낀점형", "category": "운명",
-         "note": "점심. 느낀 점 연재. 운명을 대하는 태도"},
-    13: {"track": "통찰", "engine": "관점전복형", "category": "운명",
-         "note": "오후. 팔자 통념 뒤집는 짧은 통찰"},
-    14: {"track": "통찰", "engine": "공통점관찰형", "category": "복",
-         "note": "오후. 복 많은 사람들 사주·태도 공통점"},
-    15: {"track": "통찰", "engine": "사주일침형", "category": "관계",
-         "note": "나른한 오후. 관계에 대한 한 줄 일침"},
-    16: {"track": "통찰", "engine": "운흐름통찰형", "category": "시기",
-         "note": "오후. 잘 안 될 때의 진짜 의미를 지혜로"},
-    17: {"track": "통찰", "engine": "사주느낀점형", "category": "인생",
-         "note": "퇴근 무렵. 느낀 점 연재"},
-    18: {"track": "통찰", "engine": "관점전복형", "category": "복",
-         "note": "퇴근길. 복·운 통념 뒤집기 (짧게)"},
-    19: {"track": "통찰", "engine": "공통점관찰형", "category": "관계",
-         "note": "저녁. 오래가는 인연 사주 공통점"},
-    20: {"track": "위로", "engine": "사주위로형", "category": "시기",
-         "note": "저녁. 힘든 시기를 사주로 위로. 끝에만 '나를 찾아오면 됨' 한 번"},
-    21: {"track": "통찰", "engine": "사주일침형", "category": "운명",
-         "note": "밤. 하루 닫는 한 줄 일침"},
-    22: {"track": "통찰", "engine": "사주느낀점형", "category": "인생",
-         "note": "밤. 곱씹게 되는 느낀 점 연재"},
-    23: {"track": "통찰", "engine": "관점전복형", "category": "운명",
-         "note": "자정 직전. 운명 통념 뒤집는 한 줄"},
+    8:  {"track": "통찰", "category": "인생",
+         "note": "아침. '사주 N만 명 보고 느낀 점' 연재. 오래 본 사람만 아는 담담한 깨달음",
+         "engines": ["사주느낀점형", "공통점관찰형", "사주느낀점형", "운흐름통찰형"]},
+    12: {"track": "통찰", "category": "운명",
+         "note": "점심. 운명·팔자 통념을 한 방에 뒤집는 짧은 통찰. 리포스트 유도",
+         "engines": ["관점전복형", "사주일침형", "관점전복형", "공통점관찰형"]},
+    21: {"track": "통찰", "category": "운명",
+         "note": "밤. 하루를 닫는 단단한 한 줄",
+         "engines": ["사주일침형", "관점전복형", "운흐름통찰형", "사주위로형"]},
 }
 
 ENGINE_PARTS = {
@@ -304,8 +264,15 @@ def main():
     kst_hour = (time.gmtime().tm_hour + 9) % 24
     slot = DAY_PLAN.get(kst_hour)
     if slot is None:
-        print(f"skip: KST {kst_hour}시는 게시 슬롯 없음 (새벽 죽은 시간대)")
+        print(f"skip: KST {kst_hour}시는 발행 슬롯 아님 (하루 3회: 8·12·21시)")
         return 0
+
+    # 요일마다 엔진 로테이션(반복 방지). 사주위로형이 걸리면 위로 트랙으로 전환.
+    slot = dict(slot)
+    engines = slot.pop("engines")
+    slot["engine"] = engines[time.gmtime().tm_yday % len(engines)]
+    if slot["engine"] == "사주위로형":
+        slot["track"] = "위로"
 
     state = json.load(open("state.json", encoding="utf-8"))
     style_guide = open("style_guide.md", encoding="utf-8").read()
