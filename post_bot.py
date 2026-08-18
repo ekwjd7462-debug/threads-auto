@@ -116,8 +116,10 @@ def validate(data, lo, hi):
     if any(len(p) > MAX_PART_LEN for p in parts):
         raise ValueError("part too long")
     for p in parts:
+        # 손님 대사 인용("...")은 존댓말이어도 허용 — 인용부호 안은 검사에서 제외
+        p_chk = re.sub(r'"[^"\n]{1,80}"', '""', p)
         for pat, why in FORBIDDEN:
-            if pat.search(p):
+            if pat.search(p_chk):
                 raise ValueError(f"forbidden pattern: {why}")
     # "TOP N" / "N가지" 예고 개수와 실제 번호 항목 수 일치 검사
     body = "\n".join(parts)
@@ -253,22 +255,21 @@ def threads_post(token, text, reply_to=None):
 
 def main():
     token = os.environ["THREADS_TOKEN"]
-    gemini_key = os.environ["GEMINI_API_KEY"]
 
-    kst_hour = (time.gmtime().tm_hour + 9) % 24
-    slot = DAY_PLAN.get(kst_hour)
-    if slot is None:
-        print(f"skip: KST {kst_hour}시는 발행 슬롯 아님 (하루 3회: 8·12·21시)")
+    # v13: 큐 모드. 검수·승인된 글(queue.json)만 발행. 해당 KST 시각에 예약된 글이 없으면 스킵.
+    #      즉석 생성은 하지 않음(검수 없는 글은 나가지 않음).
+    now = time.gmtime(time.time() + 9 * 3600)
+    now_key = time.strftime("%Y-%m-%dT%H", now)
+
+    queue = json.load(open("queue.json", encoding="utf-8"))
+    items = queue.get("items", [])
+    todo = [it for it in items if it.get("when") == now_key and not it.get("posted")]
+    if not todo:
+        print(f"skip: KST {now_key} 예약 글 없음 (queue {sum(1 for i in items if not i.get('posted'))}건 대기)")
         return 0
-
-    # 요일마다 소재 카테고리 로테이션(반복 방지). 엔진은 별하3파트형 고정.
-    slot = dict(slot)
-    cats = slot.pop("categories")
-    slot["category"] = cats[time.gmtime().tm_yday % len(cats)]
+    item = todo[0]
 
     state = json.load(open("state.json", encoding="utf-8"))
-    style_guide = open("style_guide.md", encoding="utf-8").read()
-
     hist = state.get("history", [])
     if hist:
         last_ts = time.mktime(time.strptime(hist[-1]["posted_at_utc"], "%Y-%m-%dT%H:%M:%SZ"))
@@ -276,18 +277,18 @@ def main():
             print(f"skip: last post {int((time.time()-last_ts)//60)} min ago (<45)")
             return 0
 
+    # 발행 전 안전 검증(길이·금지패턴). 실패 시 이 글은 건너뛰고 표시만 남김.
+    try:
+        title, parts = validate({"title": item.get("title", ""), "parts": item["parts"]}, 1, 3)
+    except (ValueError, AssertionError) as e:
+        print(f"[queue] {now_key} '{item.get('title')}' 검증 실패, 발행 안 함: {e}", flush=True)
+        item["posted"] = True
+        item["error"] = str(e)
+        json.dump(queue, open("queue.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        return 0
+
     idx = state["next_index"]
-
-    avoid = []
-    for h in hist[-25:]:
-        avoid.append(h["title"])
-        if h.get("hook"):
-            avoid.append(h["hook"])
-
-    print(f"[post] #{idx}: KST{kst_hour}시 {slot['track']}/{slot['engine']} × {slot['category']}",
-          flush=True)
-
-    title, parts = generate(gemini_key, slot, style_guide, avoid)
+    print(f"[post] #{idx}: KST {now_key} {title} ({len(parts)} parts)", flush=True)
 
     prev = None
     ids = []
@@ -298,11 +299,16 @@ def main():
         print(f"  part {i+1}/{len(parts)} -> {pid}", flush=True)
         time.sleep(3)
 
+    item["posted"] = True
+    item["root_id"] = ids[0]
+    item["posted_at_utc"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    json.dump(queue, open("queue.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+
     state["next_index"] = idx + 1
     state.setdefault("history", []).append(
         {"index": idx, "title": title, "hook": parts[0].split("\n")[0][:80],
-         "engine": slot["engine"], "track": slot["track"], "root_id": ids[0],
-         "posted_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())})
+         "engine": "큐", "track": "검수승인", "root_id": ids[0],
+         "posted_at_utc": item["posted_at_utc"]})
     json.dump(state, open("state.json", "w", encoding="utf-8"),
               ensure_ascii=False, indent=1)
     print(f"[done] #{idx} posted ({len(parts)} parts). next_index={idx+1}")
