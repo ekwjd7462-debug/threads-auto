@@ -263,6 +263,9 @@ def main():
 
     queue = json.load(open("queue.json", encoding="utf-8"))
     items = queue.get("items", [])
+    if queue.get("paused"):
+        print("skip: queue paused (검수·중단 상태). queue.json의 paused를 false로 바꾸면 재개")
+        return 0
     todo = [it for it in items if it.get("when") == now_key and not it.get("posted")]
     if not todo:
         print(f"skip: KST {now_key} 예약 글 없음 (queue {sum(1 for i in items if not i.get('posted'))}건 대기)")
